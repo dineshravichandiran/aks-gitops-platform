@@ -19,7 +19,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "VM size for the nodes. Change it if your subscription has no quota for this size in the region."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2s_v2"
 }
 
 variable "tags" {
