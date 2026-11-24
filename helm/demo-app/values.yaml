@@ -1,7 +1,7 @@
 # The CI workflow rewrites image.repository and image.tag after each build.
 image:
-  repository: ghcr.io/example/aks-gitops-platform/demo-app
-  tag: "initial"
+  repository: ghcr.io/dineshravichandiran/aks-gitops-platform/demo-app
+  tag: "55f6712"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
