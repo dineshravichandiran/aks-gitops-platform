@@ -8,7 +8,7 @@ replicaCount: 2
 
 # Share of /work requests that fail on purpose, from "0" to "1".
 # Change it in Git to trigger the alert demo.
-failureRate: "0"
+failureRate: "0.3"
 
 service:
   port: 80
