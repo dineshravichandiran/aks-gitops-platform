@@ -118,6 +118,18 @@ The AKS control plane is on the free tier. You pay for two small VMs while the c
 
 Take screenshots of the Argo CD tree, the Grafana dashboard and the firing alert for your notes.
 
+## Screenshots
+
+Captured from the running cluster.
+
+**Argo CD: `demo-app` is Healthy and Synced, deployed from this repository**
+
+![Argo CD demo-app tree](docs/argocd-demo-app-tree.jpg)
+
+**Grafana: CPU and memory of the `demo` namespace**
+
+![Grafana demo namespace](docs/grafana-demo-namespace.jpg)
+
 ## Tear down
 
 ```bash
