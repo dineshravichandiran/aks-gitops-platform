@@ -8,7 +8,7 @@ WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY app.py tracing.py ./
 
 RUN useradd --system --uid 10001 appuser
 USER 10001

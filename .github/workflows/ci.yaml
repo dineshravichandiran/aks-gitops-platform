@@ -50,12 +50,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: app
-          push: true
+          load: true
+          push: false
           tags: ${{ env.IMAGE }}:${{ env.TAG }}
+
+      # Trivy runs from its container image pinned to 0.69.3 instead of a third-party action.
+      # Vulnerabilities with no fix available yet are ignored.
+      - name: Scan image with Trivy (report HIGH and CRITICAL)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.69.3 \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "${IMAGE}:${TAG}"
+
+      - name: Block the release on fixable CRITICAL vulnerabilities
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.69.3 \
+            image --severity CRITICAL --ignore-unfixed --exit-code 1 --quiet "${IMAGE}:${TAG}"
+
+      - name: Push image
+        run: docker push "${IMAGE}:${TAG}"
 
       - name: Point the Helm values at the new image
         run: |

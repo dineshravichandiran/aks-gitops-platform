@@ -26,6 +26,12 @@ spec:
               value: {{ .Values.failureRate | quote }}
             - name: APP_VERSION
               value: {{ .Values.image.tag | quote }}
+            {{- if .Values.tracing.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.tracing.endpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: demo-app
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /healthz

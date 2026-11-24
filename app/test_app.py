@@ -31,3 +31,39 @@ def test_metrics_exposes_request_counter(monkeypatch):
     body = c.get("/metrics").get_data(as_text=True)
     assert "http_requests_total" in body
     assert 'path="/work"' in body
+
+
+def test_tracing_is_off_without_endpoint(monkeypatch):
+    from flask import Flask
+
+    import tracing
+
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    assert tracing.setup_tracing(Flask("off")) is False
+
+
+def test_tracing_records_a_span_for_work_but_not_for_healthz(monkeypatch):
+    from flask import Flask
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    import tracing
+
+    monkeypatch.setenv("FAILURE_RATE", "0")
+    exporter = InMemorySpanExporter()
+    traced = Flask("traced")
+
+    @traced.route("/work")
+    def work():
+        return "ok"
+
+    @traced.route("/healthz")
+    def healthz():
+        return "ok"
+
+    assert tracing.setup_tracing(traced, exporter=exporter) is True
+    c = traced.test_client()
+    c.get("/work")
+    c.get("/healthz")
+    names = [span.name for span in exporter.get_finished_spans()]
+    assert any("/work" in n for n in names)
+    assert not any("healthz" in n for n in names)

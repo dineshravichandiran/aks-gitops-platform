@@ -1,0 +1,58 @@
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore: ["app/**", "helm/demo-app/values.yaml", "docs/**", "README.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dashboard JSON is valid and the ConfigMap is up to date
+        run: python3 scripts/build-dashboard-configmap.py --check
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible and ansible-lint
+        run: pip install ansible ansible-lint
+      - name: Syntax check
+        working-directory: ansible
+        run: |
+          printf '[hardening_targets]\nlocalhost ansible_connection=local\n' > /tmp/inventory.ini
+          ansible-playbook -i /tmp/inventory.ini hardening.yml --syntax-check
+      - name: Lint
+        working-directory: ansible
+        run: ansible-lint hardening.yml
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint the chart
+        run: helm lint helm/demo-app
+      - name: Render with tracing on and check the env var is set
+        run: |
+          helm template demo helm/demo-app --set tracing.enabled=true | grep -q OTEL_EXPORTER_OTLP_ENDPOINT
+      - name: Render with tracing off and check the env var is absent
+        run: |
+          ! helm template demo helm/demo-app | grep -q OTEL_EXPORTER_OTLP_ENDPOINT
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config -q

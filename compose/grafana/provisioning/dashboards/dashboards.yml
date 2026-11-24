@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: demo-app
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

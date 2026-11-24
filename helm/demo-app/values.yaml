@@ -1,7 +1,7 @@
 # The CI workflow rewrites image.repository and image.tag after each build.
 image:
-  repository: ghcr.io/dineshravichandiran/aks-gitops-platform/demo-app
-  tag: "a08e49f"
+  repository: ghcr.io/example/aks-gitops-platform/demo-app
+  tag: "initial"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -21,3 +21,9 @@ resources:
   limits:
     cpu: 250m
     memory: 128Mi
+
+# Send traces to the OpenTelemetry collector (see observability/tracing).
+# Needs the collector to be running first; leave off otherwise.
+tracing:
+  enabled: false
+  endpoint: http://otel-collector.observability.svc.cluster.local:4318

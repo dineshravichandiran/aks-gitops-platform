@@ -1,0 +1,25 @@
+# Same rules as monitoring/alert-rules.yaml, in plain Prometheus format for the Compose stack.
+groups:
+  - name: demo-app-slo
+    rules:
+      - record: demo_app:error_ratio:rate5m
+        expr: |
+          sum(rate(http_requests_total{job="demo-app",status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total{job="demo-app"}[5m]))
+      - record: demo_app:slo_burn_rate:5m
+        expr: demo_app:error_ratio:rate5m / 0.01
+      - alert: DemoAppHighErrorRate
+        expr: demo_app:error_ratio:rate5m > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "demo-app error ratio is above 5%"
+      - alert: DemoAppFastBurn
+        expr: demo_app:slo_burn_rate:5m > 14.4
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "demo-app is burning its error budget fast"

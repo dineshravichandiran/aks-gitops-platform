@@ -64,6 +64,10 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 | Packaging and delivery | Docker, Helm, Argo CD |
 | Application | Python, Flask, prometheus_client, pytest |
 | Monitoring | Prometheus, Grafana, Alertmanager (kube-prometheus-stack) |
+| Tracing | OpenTelemetry (Python SDK), OpenTelemetry Collector, Jaeger v2 |
+| Configuration management | Ansible |
+| Security | Trivy image scanning in CI |
+| Local development | Docker Compose |
 
 ## Repository layout
 
@@ -75,7 +79,11 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 | `helm/demo-app/` | Helm chart: Deployment, Service, ServiceMonitor |
 | `argocd/` | Argo CD Application that deploys the chart from this repository |
 | `monitoring/` | Helm values for Prometheus and Grafana, and the alert and SLO rules |
-| `.github/workflows/` | CI: run tests, build and push the image, update the chart's image tag |
+| `monitoring/dashboards/` | Grafana SLO dashboard as JSON, and the generated ConfigMap the Grafana sidecar loads |
+| `observability/tracing/` | Jaeger and OpenTelemetry collector manifests (optional) |
+| `compose.yaml`, `compose/` | Local stack with Docker Compose: app, Prometheus, Grafana, optional Jaeger |
+| `ansible/` | Playbook that hardens an Ubuntu/Debian VM |
+| `.github/workflows/` | `ci`: test, build, Trivy scan, push, update the image tag. `checks`: dashboard, Ansible, Helm and Compose checks |
 | `docs/` | Architecture notes and screenshots |
 
 ## Screenshots
@@ -206,12 +214,59 @@ The rules are in [monitoring/alert-rules.yaml](monitoring/alert-rules.yaml).
 
 Check the Azure portal afterwards for any leftover resource groups.
 
-## Roadmap
+## Extras
 
-- Add an OpenTelemetry collector and send traces to Tempo or Jaeger.
-- Add a Grafana dashboard for the SLO and keep it in Git.
-- Add an Ansible playbook that hardens a VM.
-- Add a Lambda function on AWS that restarts a failing service.
+### SLO dashboard as code
+
+`monitoring/dashboards/demo-app-slo.json` is a Grafana dashboard with availability, error budget remaining, burn rate, request rate by status, error ratio, p50/p95/p99 latency and pod restarts. `scripts/build-dashboard-configmap.py` wraps the JSON in a ConfigMap labelled `grafana_dashboard: "1"`, which the Grafana sidecar from kube-prometheus-stack picks up. CI fails if the ConfigMap is out of date.
+
+```bash
+kubectl apply -f argocd/observability.yaml   # Argo CD syncs the dashboard (and the tracing stack below)
+```
+
+### Tracing with OpenTelemetry and Jaeger
+
+Tracing is off by default. When `tracing.enabled=true` in the Helm values, the app gets `OTEL_EXPORTER_OTLP_ENDPOINT` and sends spans over OTLP/HTTP to a collector, which batches them and forwards to Jaeger. Health checks and `/metrics` are not traced.
+
+```bash
+# set tracing.enabled: true in helm/demo-app/values.yaml and push; Argo CD rolls it out
+kubectl -n observability port-forward svc/jaeger 16686:16686   # then open http://localhost:16686
+```
+
+### Local stack with Docker Compose
+
+```bash
+docker compose up --build                    # app :8080, Prometheus :9090, Grafana :3000 (admin / admin)
+docker compose --profile tracing up --build  # adds Jaeger on :16686
+FAILURE_RATE=0.5 docker compose up --build   # failure drill without a cluster
+```
+
+The app, Prometheus and Grafana have healthchecks and start in that order. Grafana comes up with the Prometheus data source and the SLO dashboard already provisioned. The pod panels stay empty locally because they read Kubernetes metrics.
+
+### Ansible VM hardening
+
+`ansible/hardening.yml` configures an Ubuntu/Debian VM: key-only SSH with root login off, UFW default-deny, fail2ban for SSH, automatic security updates, kernel network settings and auditd rules for user and sudo files. It is written to be idempotent.
+
+```bash
+cd ansible
+cp inventory.example.ini inventory.ini        # add your VM
+ansible-playbook hardening.yml --check --diff # dry run first
+ansible-playbook hardening.yml
+```
+
+### Image scanning
+
+The CI workflow scans the built image with Trivy before pushing it. HIGH and CRITICAL findings are reported, and a fixable CRITICAL finding stops the release. Trivy runs from its container image pinned to a fixed version rather than through a third-party action.
+
+### What has been tested
+
+| Item | Checked how |
+|---|---|
+| App tracing | Unit tests with an in-memory exporter, plus a real run that sent an OTLP request to a local receiver |
+| Dashboard and ConfigMap | JSON validity and ConfigMap generation, checked locally and by the `checks` workflow |
+| Ansible playbook | `ansible-lint` (production profile) and `--syntax-check`, run locally and by the `checks` workflow. Not yet run against a real VM |
+| Compose file | `docker compose config` validates it. The stack itself has not been started |
+| Helm tracing values, Jaeger and collector manifests, Trivy step | Written but not yet run on the cluster or in CI. The `checks` workflow runs `helm lint` and a render test |
 
 ## Author
 

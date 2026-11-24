@@ -1,0 +1,167 @@
+---
+# Baseline hardening for an Ubuntu/Debian VM.
+# Idempotent: a second run should report changed=0.
+#
+#   ansible-playbook hardening.yml --check --diff     # dry run first
+#   ansible-playbook hardening.yml                    # apply
+#
+# Keep a second SSH session open while the first run applies the SSH and firewall changes.
+- name: Harden Ubuntu/Debian VM
+  hosts: hardening_targets
+  become: true
+  vars:
+    ssh_port: 22
+    ssh_allow_password_login: false
+    extra_allowed_tcp_ports: []        # for example [80, 443]
+    fail2ban_maxretry: 5
+    fail2ban_bantime: 3600
+    sysctl_settings:
+      net.ipv4.conf.all.rp_filter: 1
+      net.ipv4.conf.default.rp_filter: 1
+      net.ipv4.conf.all.accept_redirects: 0
+      net.ipv4.conf.default.accept_redirects: 0
+      net.ipv4.conf.all.send_redirects: 0
+      net.ipv4.conf.all.accept_source_route: 0
+      net.ipv4.icmp_echo_ignore_broadcasts: 1
+      net.ipv4.tcp_syncookies: 1
+      kernel.kptr_restrict: 2
+      kernel.dmesg_restrict: 1
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+        state: restarted
+
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+
+    - name: Restart auditd
+      ansible.builtin.command: augenrules --load   # auditd refuses a manual restart; this loads new rules
+      changed_when: true
+
+  pre_tasks:
+    - name: Refuse to run on unsupported systems
+      ansible.builtin.assert:
+        that: ansible_facts['os_family'] == 'Debian'
+        fail_msg: "This playbook supports Debian and Ubuntu only."
+
+  tasks:
+    - name: Install security packages
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - auditd
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ---- SSH ----
+    - name: Harden sshd settings
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?\\s*{{ item.key }}\\s"
+        line: "{{ item.key }} {{ item.value }}"
+        validate: /usr/sbin/sshd -t -f %s
+      loop:
+        - { key: PermitRootLogin, value: "no" }
+        - { key: PasswordAuthentication, value: "{{ 'yes' if ssh_allow_password_login else 'no' }}" }
+        - { key: PubkeyAuthentication, value: "yes" }
+        - { key: X11Forwarding, value: "no" }
+        - { key: MaxAuthTries, value: "3" }
+        - { key: ClientAliveInterval, value: "300" }
+        - { key: ClientAliveCountMax, value: "2" }
+      notify: Restart sshd
+
+    # ---- Firewall ----
+    - name: Allow SSH through UFW before enabling it
+      community.general.ufw:
+        rule: allow
+        port: "{{ ssh_port | string }}"
+        proto: tcp
+
+    - name: Allow extra TCP ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item | string }}"
+        proto: tcp
+      loop: "{{ extra_allowed_tcp_ports }}"
+
+    - name: Default deny incoming, allow outgoing
+      community.general.ufw:
+        default: "{{ 'deny' if item.direction == 'incoming' else 'allow' }}"
+        direction: "{{ item.direction }}"
+      loop:
+        - { direction: incoming }
+        - { direction: outgoing }
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+
+    # ---- Brute-force protection ----
+    - name: Configure fail2ban for SSH
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/sshd-local.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [sshd]
+          enabled = true
+          port = {{ ssh_port }}
+          maxretry = {{ fail2ban_maxretry }}
+          bantime = {{ fail2ban_bantime }}
+      notify: Restart fail2ban
+
+    - name: Make sure fail2ban is running and enabled at boot
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    # ---- Patching ----
+    - name: Turn on automatic security updates
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+    # ---- Kernel settings ----
+    - name: Apply sysctl hardening
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value | string }}"
+        sysctl_file: /etc/sysctl.d/99-hardening.conf
+        state: present
+        reload: true
+      loop: "{{ sysctl_settings | dict2items }}"
+
+    # ---- Audit ----
+    - name: Make sure auditd is running and enabled at boot
+      ansible.builtin.service:
+        name: auditd
+        state: started
+        enabled: true
+
+    - name: Audit changes to user and sudo files
+      ansible.builtin.copy:
+        dest: /etc/audit/rules.d/identity.rules
+        owner: root
+        group: root
+        mode: "0640"
+        content: |
+          -w /etc/passwd -p wa -k identity
+          -w /etc/shadow -p wa -k identity
+          -w /etc/group -p wa -k identity
+          -w /etc/sudoers -p wa -k sudoers
+          -w /etc/sudoers.d/ -p wa -k sudoers
+      notify: Restart auditd

@@ -5,7 +5,10 @@ import time
 from flask import Flask, Response, jsonify, request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
+from tracing import setup_tracing
+
 app = Flask(__name__)
+setup_tracing(app)  # does nothing unless OTEL_EXPORTER_OTLP_ENDPOINT is set
 
 REQUESTS = Counter(
     "http_requests_total", "Total HTTP requests", ["method", "path", "status"]
