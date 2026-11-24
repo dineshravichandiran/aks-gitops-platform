@@ -266,7 +266,8 @@ The CI workflow scans the built image with Trivy before pushing it. HIGH and CRI
 | Dashboard and ConfigMap | JSON validity and ConfigMap generation, checked locally and by the `checks` workflow |
 | Ansible playbook | `ansible-lint` (production profile) and `--syntax-check`, run locally and by the `checks` workflow. Not yet run against a real VM |
 | Compose file | `docker compose config` validates it. The stack itself has not been started |
-| Helm tracing values, Jaeger and collector manifests, Trivy step | Written but not yet run on the cluster or in CI. The `checks` workflow runs `helm lint` and a render test |
+| Trivy scan and push in CI | Ran in the `ci` workflow on GitHub (report on HIGH and CRITICAL, block on fixable CRITICAL) and passed |
+| Helm tracing values, Jaeger and collector manifests | Written but not yet run on the cluster. The `checks` workflow runs `helm lint` and a render test |
 
 ## Author
 
