@@ -25,5 +25,5 @@ resources:
 # Send traces to the OpenTelemetry collector (see observability/tracing).
 # Needs the collector to be running first; leave off otherwise.
 tracing:
-  enabled: false
+  enabled: true
   endpoint: http://otel-collector.observability.svc.cluster.local:4318
