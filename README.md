@@ -100,6 +100,14 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 
 ![Prometheus alert firing](docs/prometheus-alert-firing.jpg)
 
+**Grafana: the SLO dashboard, loaded from Git. The earlier failure drill shows as the error spike and the burn rate above the alert line**
+
+![Grafana SLO dashboard](docs/grafana-slo-dashboard.jpg)
+
+**Jaeger: traces of requests to `demo-app`, sent through the OpenTelemetry collector**
+
+![Jaeger traces](docs/jaeger-traces.jpg)
+
 ## Getting started
 
 ### Prerequisites
@@ -262,12 +270,12 @@ The CI workflow scans the built image with Trivy before pushing it. HIGH and CRI
 
 | Item | Checked how |
 |---|---|
-| App tracing | Unit tests with an in-memory exporter, plus a real run that sent an OTLP request to a local receiver |
-| Dashboard and ConfigMap | JSON validity and ConfigMap generation, checked locally and by the `checks` workflow |
+| App tracing | Unit tests with an in-memory exporter. On the cluster, with tracing switched on, the app sent traces through the collector to Jaeger and `demo-app` traces appeared |
+| Dashboard and ConfigMap | JSON validity and ConfigMap generation, checked by the `checks` workflow. Loaded into Grafana on the cluster by Argo CD, and the panels show live data |
 | Ansible playbook | `ansible-lint` (production profile) and `--syntax-check`, run locally and by the `checks` workflow. Not yet run against a real VM |
 | Compose file | `docker compose config` validates it. The stack itself has not been started |
 | Trivy scan and push in CI | Ran in the `ci` workflow on GitHub (report on HIGH and CRITICAL, block on fixable CRITICAL) and passed |
-| Helm tracing values, Jaeger and collector manifests | Written but not yet run on the cluster. The `checks` workflow runs `helm lint` and a render test |
+| Helm tracing values, Jaeger and collector manifests | Deployed by Argo CD on the cluster. Jaeger and the collector became ready and the tracing values rolled out the app pods |
 
 ## Author
 
