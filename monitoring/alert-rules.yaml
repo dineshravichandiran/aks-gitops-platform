@@ -1,0 +1,37 @@
+# Error-ratio recording rule, an SLO burn rate and two alerts for demo-app.
+# SLO used here: 99% of requests succeed, so the error budget is 1%.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demo-app-rules
+  namespace: monitoring
+spec:
+  groups:
+    - name: demo-app-slo
+      rules:
+        - record: demo_app:error_ratio:rate5m
+          expr: |
+            sum(rate(http_requests_total{job="demo-app",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="demo-app"}[5m]))
+
+        - record: demo_app:slo_burn_rate:5m
+          expr: demo_app:error_ratio:rate5m / 0.01
+
+        - alert: DemoAppHighErrorRate
+          expr: demo_app:error_ratio:rate5m > 0.05
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "demo-app error ratio is above 5%"
+            description: "{{ $value | humanizePercentage }} of requests failed over the last 5 minutes."
+
+        - alert: DemoAppFastBurn
+          expr: demo_app:slo_burn_rate:5m > 14.4
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "demo-app is burning its error budget fast"
+            description: "Burn rate is {{ $value }}x. At this speed the monthly budget is gone in about 2 days."

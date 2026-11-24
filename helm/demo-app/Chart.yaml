@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-app
+description: Small Flask service used to practise GitOps and monitoring on AKS
+type: application
+version: 0.1.0
+appVersion: "1.0"

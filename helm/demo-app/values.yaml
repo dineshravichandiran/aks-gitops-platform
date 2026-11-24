@@ -1,0 +1,23 @@
+# The CI workflow rewrites image.repository and image.tag after each build.
+image:
+  repository: ghcr.io/example/aks-gitops-platform/demo-app
+  tag: "initial"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# Share of /work requests that fail on purpose, from "0" to "1".
+# Change it in Git to trigger the alert demo.
+failureRate: "0"
+
+service:
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
