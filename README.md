@@ -272,7 +272,7 @@ The CI workflow scans the built image with Trivy before pushing it. HIGH and CRI
 |---|---|
 | App tracing | Unit tests with an in-memory exporter. On the cluster, with tracing switched on, the app sent traces through the collector to Jaeger and `demo-app` traces appeared |
 | Dashboard and ConfigMap | JSON validity and ConfigMap generation, checked by the `checks` workflow. Loaded into Grafana on the cluster by Argo CD, and the panels show live data |
-| Ansible playbook | `ansible-lint` (production profile) and `--syntax-check`, run locally and by the `checks` workflow. Not yet run against a real VM |
+| Ansible playbook | `ansible-lint` (production profile) and `--syntax-check`, run locally and by the `checks` workflow. Run against a real Ubuntu 22.04 VM on Azure: the first run applied 11 changes, a second run reported `changed=0`, and afterwards SSH was key-only with root login off, UFW was active, and fail2ban and auditd were running. The VM was deleted after the test. `--check` stops at the package install on a brand-new VM, because Ansible does not refresh the apt cache in check mode |
 | Compose file | `docker compose config` validates it. The stack itself has not been started |
 | Trivy scan and push in CI | Ran in the `ci` workflow on GitHub (report on HIGH and CRITICAL, block on fixable CRITICAL) and passed |
 | Helm tracing values, Jaeger and collector manifests | Deployed by Argo CD on the cluster. Jaeger and the collector became ready and the tracing values rolled out the app pods |
